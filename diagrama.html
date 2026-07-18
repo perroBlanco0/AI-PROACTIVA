@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Arquitectura - AI Proactive Agent</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f0f2f5;
+      color: #1a1a1a;
+      padding: 40px;
+    }
+    h1 {
+      text-align: center;
+      font-size: 28px;
+      color: #4f46e5;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      text-align: center;
+      color: #6b7280;
+      margin-bottom: 40px;
+      font-size: 14px;
+    }
+
+    /* ===== CARDS ===== */
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 32px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      border: 1px solid #e5e7eb;
+    }
+    .card h2 {
+      font-size: 18px;
+      color: #374151;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ===== FILE LIST ===== */
+    .file-tree {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+    }
+    .file-item {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .file-item .name {
+      font-weight: 600;
+      font-size: 13px;
+      color: #4f46e5;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+    .file-item .desc {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+
+    /* ===== FLOW DIAGRAM ===== */
+    .flow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      flex-wrap: wrap;
+      padding: 20px 0;
+    }
+    .flow-node {
+      background: white;
+      border: 2px solid #e0e7ff;
+      border-radius: 12px;
+      padding: 16px 20px;
+      text-align: center;
+      min-width: 120px;
+      max-width: 160px;
+      font-size: 12px;
+      position: relative;
+    }
+    .flow-node .icon {
+      font-size: 28px;
+      display: block;
+      margin-bottom: 6px;
+    }
+    .flow-node .label {
+      font-weight: 600;
+      color: #374151;
+      font-size: 12px;
+    }
+    .flow-node .sublabel {
+      color: #9ca3af;
+      font-size: 10px;
+      margin-top: 2px;
+    }
+    .flow-node.highlight {
+      border-color: #4f46e5;
+      background: #f5f3ff;
+    }
+    .flow-node.green {
+      border-color: #059669;
+      background: #f0fdf4;
+    }
+    .flow-node.orange {
+      border-color: #ea580c;
+      background: #fff7ed;
+    }
+    .flow-node.purple {
+      border-color: #7c3aed;
+      background: #f5f3ff;
+    }
+    .flow-arrow {
+      font-size: 22px;
+      color: #9ca3af;
+      padding: 0 4px;
+      flex-shrink: 0;
+    }
+
+    /* ===== ARCHITECTURE BLOCKS ===== */
+    .arch {
+      display: flex;
+      gap: 24px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .arch-layer {
+      flex: 1;
+      min-width: 180px;
+      max-width: 240px;
+      border: 2px solid;
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .arch-layer h3 {
+      font-size: 13px;
+      text-align: center;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+    .arch-layer ul {
+      list-style: none;
+      font-size: 12px;
+    }
+    .arch-layer ul li {
+      padding: 4px 0;
+      border-bottom: 1px solid #f3f4f6;
+      color: #4b5563;
+    }
+    .arch-layer ul li:last-child { border: none; }
+    .arch-layer.layer-ui { border-color: #4f46e5; background: #f5f3ff; }
+    .arch-layer.layer-ui h3 { color: #4f46e5; }
+    .arch-layer.layer-bg { border-color: #059669; background: #f0fdf4; }
+    .arch-layer.layer-bg h3 { color: #059669; }
+    .arch-layer.layer-api { border-color: #ea580c; background: #fff7ed; }
+    .arch-layer.layer-api h3 { color: #ea580c; }
+
+    /* ===== DATA FLOW ===== */
+    .dataflow {
+      position: relative;
+      padding: 20px 0;
+    }
+    .dataflow-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 14px;
+      padding: 12px 16px;
+      background: #f9fafb;
+      border-radius: 8px;
+      border-left: 4px solid #4f46e5;
+    }
+    .dataflow-step .num {
+      background: #4f46e5;
+      color: white;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .dataflow-step .content {
+      flex: 1;
+    }
+    .dataflow-step .content strong {
+      font-size: 13px;
+      color: #374151;
+    }
+    .dataflow-step .content p {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 2px;
+    }
+    .dataflow-step .arrow-label {
+      font-size: 11px;
+      color: #4f46e5;
+      font-weight: 500;
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+
+    .code-block {
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      overflow-x: auto;
+      margin-top: 8px;
+      line-height: 1.6;
+    }
+    .code-block .comment { color: #94a3b8; }
+    .code-block .key { color: #818cf8; }
+    .code-block .string { color: #34d399; }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .badge-js { background: #fef3c7; color: #92400e; }
+    .badge-css { background: #dbeafe; color: #1e40af; }
+    .badge-html { background: #fce7f3; color: #9d174d; }
+    .badge-json { background: #e0e7ff; color: #3730a3; }
+  </style>
+</head>
+<body>
+
+<h1>🧠 AI Proactive Agent</h1>
+<p class="subtitle">Arquitectura y flujo de datos de la extensión</p>
+
+<!-- ===== FILE STRUCTURE ===== -->
+<div class="card">
+  <h2>📁 Estructura del proyecto</h2>
+  <div class="file-tree">
+    <div class="file-item">
+      <div class="name">manifest.json</div>
+      <div class="desc"><span class="badge badge-json">JSON</span> Configuración de la extensión (Manifest V3)</div>
+    </div>
+    <div class="file-item">
+      <div class="name">background.js</div>
+      <div class="desc"><span class="badge badge-js">JS</span> Service worker: captura pantalla + llama a API IA</div>
+    </div>
+    <div class="file-item">
+      <div class="name">content.js</div>
+      <div class="desc"><span class="badge badge-js">JS</span> Inyecta el widget de chat en cada página</div>
+    </div>
+    <div class="file-item">
+      <div class="name">styles.css</div>
+      <div class="desc"><span class="badge badge-css">CSS</span> Estilos del chat flotante</div>
+    </div>
+    <div class="file-item">
+      <div class="name">popup.html</div>
+      <div class="desc"><span class="badge badge-html">HTML</span> Popup de control rápido</div>
+    </div>
+    <div class="file-item">
+      <div class="name">popup.js</div>
+      <div class="desc"><span class="badge badge-js">JS</span> Lógica del popup</div>
+    </div>
+    <div class="file-item">
+      <div class="name">options.html</div>
+      <div class="desc"><span class="badge badge-html">HTML</span> Página de configuración</div>
+    </div>
+    <div class="file-item">
+      <div class="name">options.js</div>
+      <div class="desc"><span class="badge badge-js">JS</span> Lógica de configuración</div>
+    </div>
+    <div class="file-item">
+      <div class="name">icons/</div>
+      <div class="desc"><span class="badge badge-html">PNG</span> Íconos 16x16, 48x48, 128x128</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== COMPONENT INTERACTION ===== -->
+<div class="card">
+  <h2>🔗 Interacción entre componentes</h2>
+  <div class="flow">
+    <div class="flow-node highlight">
+      <span class="icon">🌐</span>
+      <span class="label">Página web</span>
+      <span class="sublabel">donde navega el usuario</span>
+    </div>
+    <span class="flow-arrow">← inyecta →</span>
+    <div class="flow-node purple">
+      <span class="icon">💬</span>
+      <span class="label">content.js</span>
+      <span class="sublabel">Widget chat flotante</span>
+    </div>
+    <span class="flow-arrow">← chrome.runtime →</span>
+    <div class="flow-node green">
+      <span class="icon">⚙️</span>
+      <span class="label">background.js</span>
+      <span class="sublabel">Service worker</span>
+    </div>
+    <span class="flow-arrow">← fetch →</span>
+    <div class="flow-node orange">
+      <span class="icon">☁️</span>
+      <span class="label">API IA</span>
+      <span class="sublabel">GPT / Gemini / DeepSeek</span>
+    </div>
+  </div>
+  <div style="text-align:center;margin-top:16px;font-size:12px;color:#9ca3af;">
+    content.js se comunica con background.js via chrome.runtime.sendMessage<br>
+    background.js captura la pantalla (chrome.tabs.captureVisibleTab) y llama a la API
+  </div>
+</div>
+
+<!-- ===== DATA FLOW ===== -->
+<div class="card">
+  <h2>🔄 Flujo de datos paso a paso</h2>
+  <div class="dataflow">
+
+    <div class="dataflow-step">
+      <span class="num">1</span>
+      <div class="content">
+        <strong>Navegación / Click</strong>
+        <p>El usuario navega a una página nueva o cliquea "Enviar" en el chat</p>
+      </div>
+      <span class="arrow-label">content.js</span>
+    </div>
+
+    <div class="dataflow-step">
+      <span class="num">2</span>
+      <div class="content">
+        <strong>Extraer texto de la página (solo si modelo no tiene visión)</strong>
+        <p>content.js clona el DOM y limpia scripts/styles/nav para obtener el texto útil</p>
+      </div>
+      <span class="arrow-label">(opcional)</span>
+    </div>
+
+    <div class="dataflow-step">
+      <span class="num">3</span>
+      <div class="content">
+        <strong>Enviar mensaje al background</strong>
+        <p><code>{ type: 'ANALYZE_SCREENSHOT', query: '...', history: '...' }</code></p>
+      </div>
+      <span class="arrow-label">chrome.runtime.sendMessage</span>
+    </div>
+
+    <div class="dataflow-step">
+      <span class="num">4</span>
+      <div class="content">
+        <strong>Capturar pantalla</strong>
+        <p>background.js obtiene el tabId del sender y llama a <code>chrome.tabs.captureVisibleTab</code></p>
+      </div>
+      <span class="arrow-label">background.js</span>
+    </div>
+
+    <div class="dataflow-step">
+      <span class="num">5</span>
+      <div class="content">
+        <strong>Construir payload de la API</strong>
+        <p>Combina: System Prompt + Historial conversación + Mensaje usuario + Imagen JPEG</p>
+      </div>
+      <span class="arrow-label">background.js</span>
+    </div>
+
+    <div class="dataflow-step">
+      <span class="num">6</span>
+      <div class="content">
+        <strong>Llamar a la API de IA</strong>
+        <p>Envía vía <code>fetch()</code> al endpoint configurado (OpenAI / Gemini / DeepSeek)</p>
+      </div>
+      <span class="arrow-label">fetch → API</span>
+    </div>
+
+    <div class="dataflow-step">
+      <span class="num">7</span>
+      <div class="content">
+        <strong>Parsear respuesta</strong>
+        <p>Separa el texto de la IA de las sugerencias (separadas por <code>||</code>)</p>
+      </div>
+      <span class="arrow-label">background.js</span>
+    </div>
+
+    <div class="dataflow-step">
+      <span class="num">8</span>
+      <div class="content">
+        <strong>Enviar resultado al content script</strong>
+        <p><code>{ response: '...', suggestions: ['...', '...'] }</code></p>
+      </div>
+      <span class="arrow-label">sendResponse</span>
+    </div>
+
+    <div class="dataflow-step">
+      <span class="num">9</span>
+      <div class="content">
+        <strong>Renderizar en el chat</strong>
+        <p>content.js muestra el mensaje y las sugerencias como chips cliqueables</p>
+      </div>
+      <span class="arrow-label">content.js</span>
+    </div>
+
+    <div class="dataflow-step">
+      <span class="num">10</span>
+      <div class="content">
+        <strong>Guardar en historial</strong>
+        <p>Agrega el par (usuario → asistente) al array <code>conversationHistory[]</code></p>
+      </div>
+      <span class="arrow-label">content.js</span>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===== DATA FLOW DIAGRAM ===== -->
+<div class="card">
+  <h2>📊 Diagrama de flujo de datos</h2>
+  <div style="background:#f8fafc;border-radius:12px;padding:24px;overflow-x:auto;">
+    <pre style="font-family:'SF Mono','Fira Code',monospace;font-size:12px;line-height:1.7;color:#334155;">
+<span style="color:#6366f1;font-weight:600;">USUARIO</span>
+   │
+   ├── Navega a página ──────────────────────────────────────────┐
+   │                                                              │
+   ▼                                                              ▼
+<span style="color:#6366f1;font-weight:600;">content.js</span>                                                <span style="color:#6366f1;font-weight:600;">Popup</span>
+   │                                                              │
+   ├── init()                                                     │
+   │   ├── createChatWidget()                                     │
+   │   ├── debouncedAnalyze() ─── 1.5s ──→ GET_CONFIG             │
+   │   └── triggerInitialAnalysis()                               │
+   │       └── sendMessage({type:'ANALYZE_SCREENSHOT'})           │
+   │               │                                              │
+   │               ▼                                              │
+   │      <span style="color:#059669;font-weight:600;">background.js</span>  (Service Worker)                       │
+   │               │                                              │
+   │               ├── Obtener config (chrome.storage.sync)       │
+   │               ├── captureTab(tabId)                          │
+   │               │   └── chrome.tabs.captureVisibleTab()        │
+   │               │       └── <span style="color:#ea580c;">📸 Imagen JPEG (base64)</span>           │
+   │               │                                              │
+   │               ├── callAI(imageDataUrl, query, history)       │
+   │               │   ├── ¿Gemini? → callGemini()                │
+   │               │   │   └── fetch(Gemini API)                  │
+   │               │   └── ¿OpenAI? → callOpenAI()                │
+   │               │       └── fetch(Endpoint)                    │
+   │               │           └── <span style="color:#ea580c;">☁️ API de IA</span>                    │
+   │               │               ├── System Prompt              │
+   │               │               ├── Historial conversación     │
+   │               │               ├── Mensaje del usuario        │
+   │               │               └── 📸 Captura de pantalla     │
+   │               │                                              │
+   │               └── sendResponse({response, suggestions})      │
+   │                       │                                      │
+   │                       ▼                                      │
+   │              <span style="color:#6366f1;font-weight:600;">content.js</span>                                    │
+   │               │                                              │
+   │               ├── removeTyping()                             │
+   │               ├── addMessage(response, 'agent')              │
+   │               ├── setSuggestions(suggestions)                │
+   │               └── conversationHistory.push()                 │
+   │                                                              │
+   ▼                                                              ▼
+<span style="color:#6366f1;font-weight:600;">WIDGET CHAT</span>                                              <span style="color:#6366f1;font-weight:600;">POPUP</span>
+🤖 Mensaje visible                                         Resumen rápido
+💡 Chips de preguntas                                      Botón abrir chat
+📝 Input para escribir                                     📸 Analizar página
+    </pre>
+  </div>
+</div>
+
+<!-- ===== MESSAGE FORMATS ===== -->
+<div class="card">
+  <h2>📦 Formatos de mensajes</h2>
+
+  <h3 style="font-size:14px;color:#374151;margin-bottom:8px;">content.js → background.js</h3>
+  <div class="code-block">
+{<span class="key">
+  type</span>: <span class="string">"ANALYZE_SCREENSHOT"</span>,<span class="comment">
+  // Primer mensaje o cuando hay nueva pregunta</span>
+  query<span class="key">:</span> <span class="string">"¿Qué significa este gráfico?"</span>,<span class="comment">
+  // Historial de la conversación (texto plano)</span>
+  history<span class="key">:</span> <span class="string">"Usuario: Hola\nAsistente: Bienvenido..."</span>
+}
+  </div>
+
+  <h3 style="font-size:14px;color:#374151;margin:16px 0 8px;">background.js → API de IA (OpenAI-compatible)</h3>
+  <div class="code-block">
+{<span class="comment">
+  // System prompt configura por el usuario</span>
+  messages<span class="key">:</span> [
+    { role<span class="key">:</span> <span class="string">"system"</span>, content<span class="key">:</span> <span class="string">"Eres un asistente..."</span> },<span class="comment">
+    // Historial como contexto (si existe)</span>
+    { role<span class="key">:</span> <span class="string">"user"</span>, content<span class="key">:</span> <span class="string">"Historial: ..."</span> },<span class="comment">
+    // Mensaje actual + imagen</span>
+    { role<span class="key">:</span> <span class="string">"user"</span>, content<span class="key">:</span> [
+      { type<span class="key">:</span> <span class="string">"text"</span>, text<span class="key">:</span> <span class="string">"¿Qué significa?"</span> },
+      { type<span class="key">:</span> <span class="string">"image_url"</span>, image_url<span class="key">:</span> { url<span class="key">:</span> <span class="string">"data:image/jpeg;base64,..."</span> } }
+    ]}
+  ],
+  model<span class="key">:</span> <span class="string">"gpt-4o-mini"</span>,
+  temperature<span class="key">:</span> <span class="number">0.7</span>
+}
+  </div>
+
+  <h3 style="font-size:14px;color:#374151;margin:16px 0 8px;">API → background.js → content.js</h3>
+  <div class="code-block">
+{<span class="comment">
+  // Respuesta principal de la IA</span>
+  response<span class="key">:</span> <span class="string">"Este gráfico muestra las tendencias de ventas..."</span>,<span class="comment">
+  // Sugerencias extraídas después del último ||</span>
+  suggestions<span class="key">:</span> [
+    <span class="string">"¿Cómo se comparan estos datos con el año pasado?"</span>,
+    <span class="string">"¿Qué factores explican el pico de marzo?"</span>
+  ]
+}
+  </div>
+</div>
+
+<!-- ===== ARCHITECTURE LAYERS ===== -->
+<div class="card">
+  <h2>🏗️ Capas de la arquitectura</h2>
+  <div class="arch">
+
+    <div class="arch-layer layer-ui">
+      <h3>🎨 Capa de UI</h3>
+      <ul>
+        <li>content.js — Widget chat</li>
+        <li>styles.css — Diseño visual</li>
+        <li>popup.html/js — Menú rápido</li>
+        <li>options.html/js — Configuración</li>
+      </ul>
+    </div>
+
+    <div class="arch-layer layer-bg">
+      <h3>⚙️ Capa de servicio</h3>
+      <ul>
+        <li>background.js — Service Worker</li>
+        <li>chrome.tabs.captureVisibleTab</li>
+        <li>chrome.storage.sync</li>
+        <li>Manejo de mensajes</li>
+      </ul>
+    </div>
+
+    <div class="arch-layer layer-api">
+      <h3>☁️ Capa de IA</h3>
+      <ul>
+        <li>OpenAI (GPT-4o, etc.)</li>
+        <li>Google Gemini</li>
+        <li>DeepSeek</li>
+        <li>Cualquier API compatible</li>
+      </ul>
+    </div>
+
+  </div>
+  <div style="text-align:center;margin-top:16px;font-size:12px;color:#9ca3af;">
+    Las capas se comunican mediante chrome.runtime.sendMessage (UI ↔ Servicio) y fetch (Servicio ↔ API)
+  </div>
+</div>
+
+</body>
+</html>

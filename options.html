@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 640px;
+      margin: 40px auto;
+      padding: 0 24px;
+      color: #1a1a1a;
+      background: #f9fafb;
+    }
+    h1 { font-size: 24px; color: #4f46e5; margin-bottom: 24px; display: flex; align-items: center; gap: 10px; }
+    .card {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+    .card h2 { font-size: 16px; margin: 0 0 18px; color: #374151; }
+    .field { margin-bottom: 16px; }
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: #374151;
+      margin-bottom: 4px;
+    }
+    .field input, .field select, .field textarea {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 14px;
+      box-sizing: border-box;
+      font-family: inherit;
+    }
+    .field input:focus, .field select:focus, .field textarea:focus {
+      outline: none;
+      border-color: #4f46e5;
+      box-shadow: 0 0 0 3px rgba(79,70,229,0.1);
+    }
+    .field textarea { min-height: 120px; resize: vertical; }
+    .field .hint { font-size: 12px; color: #9ca3af; margin-top: 4px; }
+    .checkbox-field {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .checkbox-field input { width: 16px; height: 16px; }
+    .btn {
+      padding: 10px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary { background: #4f46e5; color: white; }
+    .btn-primary:hover { background: #4338ca; }
+    .btn-secondary { background: #e5e7eb; color: #374151; margin-left: 8px; }
+    .btn-secondary:hover { background: #d1d5db; }
+    #saveStatus { font-size: 14px; margin-left: 12px; }
+    .actions { margin-top: 20px; display: flex; align-items: center; }
+    details { margin-top: 16px; }
+    details summary { cursor: pointer; color: #4f46e5; font-size: 13px; font-weight: 500; }
+    .provider-info {
+      background: #f0f4ff;
+      border: 1px solid #dbeafe;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 16px;
+      font-size: 13px;
+      color: #1e40af;
+    }
+    .provider-info code {
+      background: #dbeafe;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🤖 Configuración del Agente IA</h1>
+
+  <div class="card">
+    <h2>🔗 API de IA con visión</h2>
+    <div class="provider-info">
+      ⚡ La extensión <strong>siempre captura la pantalla</strong> y la envía a la IA.
+      Necesitas un modelo con <strong>visión</strong>.<br><br>
+      🔹 <strong>GitHub Models (gratis):</strong> <code>gpt-4o-mini</code><br>
+      &nbsp;&nbsp;Endpoint: <code>https://models.inference.ai.azure.com/chat/completions</code><br>
+      &nbsp;&nbsp;API Key: token de GitHub (<code>ghp_...</code>) en <a href="https://github.com/marketplace/models" target="_blank">github.com/marketplace/models</a><br><br>
+      🔹 <strong>Gemini (gratis):</strong> <code>gemini-2.0-flash</code><br>
+      &nbsp;&nbsp;API Key: <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a><br><br>
+      🔹 <strong>OpenAI:</strong> <code>gpt-4o-mini</code>, endpoint <code>https://api.openai.com/v1/chat/completions</code>
+    </div>
+    <div class="field">
+      <label for="apiEndpoint">Endpoint de la API</label>
+      <input type="url" id="apiEndpoint" placeholder="https://models.inference.ai.azure.com/chat/completions">
+      <div class="hint">Para Gemini se ignora (usa API nativa). Para OpenAI/GitHub Models sí se usa.</div>
+    </div>
+    <div class="field">
+      <label for="apiKey">API Key</label>
+      <input type="password" id="apiKey" placeholder="sk-... o AIza... o ghp_...">
+      <div class="hint">La clave del proveedor que elijas</div>
+    </div>
+    <div class="field">
+      <label for="model">Modelo con visión</label>
+      <input type="text" id="model" placeholder="gpt-4o-mini">
+      <div class="hint">Ej: gpt-4o-mini, gemini-2.0-flash, claude-3-5-sonnet, llama3.2-vision</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>⚙️ Comportamiento</h2>
+    <div class="field">
+      <label for="language">Idioma</label>
+      <select id="language">
+        <option value="es">Español</option>
+        <option value="en">English</option>
+      </select>
+    </div>
+    <div class="checkbox-field">
+      <input type="checkbox" id="autoAnalyze">
+      <label for="autoAnalyze">Analizar automáticamente al navegar a una página nueva</label>
+    </div>
+  </div>
+
+  <div class="card">
+    <details>
+      <summary>🧠 Prompt del sistema (avanzado)</summary>
+      <div class="field">
+        <textarea id="systemPrompt" rows="8"></textarea>
+        <div class="hint">Define cómo se comporta la IA. Incluye instrucciones para separar sugerencias con ||</div>
+      </div>
+    </details>
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-primary" id="saveBtn">💾 Guardar</button>
+    <button class="btn btn-secondary" id="resetBtn">Restablecer valores</button>
+    <span id="saveStatus"></span>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
