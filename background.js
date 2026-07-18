@@ -175,9 +175,28 @@ async function callGemini(imageDataUrl, userMessage, history, config, vision, is
   return data.candidates[0].content.parts[0].text.trim();
 }
 
+const TELEGRAM_HISTORY_KEY = 'tgHistory';
+
+async function getTelegramHistory() {
+  const { [TELEGRAM_HISTORY_KEY]: history = [] } = await chrome.storage.local.get(TELEGRAM_HISTORY_KEY);
+  return history;
+}
+
+async function addTelegramHistory(userMsg, aiReply) {
+  const history = await getTelegramHistory();
+  history.push({ role: 'user', content: userMsg });
+  history.push({ role: 'assistant', content: aiReply });
+  if (history.length > 20) history.splice(0, history.length - 20);
+  await chrome.storage.local.set({ [TELEGRAM_HISTORY_KEY]: history });
+}
+
 async function processTelegramMessage(text, chatId, config) {
   try {
+    const history = await getTelegramHistory();
     const messages = [{ role: 'system', content: config.systemPrompt }];
+    for (const msg of history) {
+      messages.push(msg);
+    }
     messages.push({ role: 'user', content: text });
 
     const response = await fetch(config.apiEndpoint, {
@@ -204,6 +223,8 @@ async function processTelegramMessage(text, chatId, config) {
     const reply = data.choices[0].message.content.trim();
     const parts = reply.split('||');
     const mainReply = parts[0].trim();
+
+    await addTelegramHistory(text, mainReply);
 
     const url = `https://api.telegram.org/bot${config.telegramToken}/sendMessage`;
     const cId = isNaN(chatId) ? chatId : Number(chatId);
