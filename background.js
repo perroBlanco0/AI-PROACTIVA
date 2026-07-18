@@ -282,7 +282,11 @@ async function sendTelegramMessage(chatId, config, text) {
   });
 }
 
+let telegramPolling = false;
+
 async function pollTelegram() {
+  if (telegramPolling) return;
+  telegramPolling = true;
   try {
     const config = await getConfig();
     if (!config.telegramEnabled || !config.telegramToken || !config.telegramChatId || !config.apiKey) return;
@@ -290,7 +294,7 @@ async function pollTelegram() {
     const { telegramPollOffset = 0 } = await chrome.storage.local.get('telegramPollOffset');
     const chatId = isNaN(config.telegramChatId) ? config.telegramChatId : Number(config.telegramChatId);
 
-    const url = `https://api.telegram.org/bot${config.telegramToken}/getUpdates?offset=${telegramPollOffset}&timeout=30`;
+    const url = `https://api.telegram.org/bot${config.telegramToken}/getUpdates?offset=${telegramPollOffset}`;
     const resp = await fetch(url);
     if (!resp.ok) return;
 
@@ -311,6 +315,8 @@ async function pollTelegram() {
   } catch (e) {
     console.error('pollTelegram error:', e);
   }
+  telegramPolling = false;
+  setTimeout(pollTelegram, 15000);
 }
 
 chrome.alarms?.onAlarm.addListener((alarm) => {
@@ -322,7 +328,7 @@ chrome.alarms?.onAlarm.addListener((alarm) => {
 async function setupTelegramPoll() {
   const config = await getConfig();
   if (config.telegramEnabled && config.telegramToken && config.telegramChatId && config.apiKey) {
-    chrome.alarms?.create('telegram-poll', { periodInMinutes: 1 });
+    chrome.alarms?.create('telegram-poll', { periodInMinutes: 2 });
     pollTelegram();
   } else {
     chrome.alarms?.clear('telegram-poll');
