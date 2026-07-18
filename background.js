@@ -192,6 +192,42 @@ async function addTelegramHistory(userMsg, aiReply) {
 
 async function processTelegramMessage(text, chatId, config) {
   try {
+    const wantsScreenshot = /captura|pantalla|screenshot|screen|mira|ve esto/i.test(text);
+
+    if (wantsScreenshot && supportsVision(config.model)) {
+      await sendTelegramMessage(chatId, config, '📸 Capturando pantalla...');
+      try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!tab) throw new Error('No hay pestaña activa');
+        const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'jpeg', quality: 70 });
+        const visionMessages = [{ role: 'system', content: config.systemPrompt }];
+        visionMessages.push({
+          role: 'user',
+          content: [
+            { type: 'text', text: text },
+            { type: 'image_url', image_url: { url: dataUrl, detail: 'high' } }
+          ]
+        });
+        const resp = await fetch(config.apiEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.apiKey}` },
+          body: JSON.stringify({ model: config.model, messages: visionMessages, temperature: 0.7, max_tokens: 800 })
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          const reply = data.choices[0].message.content.trim();
+          const parts = reply.split('||');
+          const mainReply = parts[0].trim();
+          await addTelegramHistory(text, mainReply);
+          await sendTelegramMessage(chatId, config, mainReply);
+          return;
+        }
+      } catch (e) {
+        await sendTelegramMessage(chatId, config, `⚠️ No pude capturar la pantalla: ${e.message}`);
+        return;
+      }
+    }
+
     const history = await getTelegramHistory();
     const messages = [{ role: 'system', content: config.systemPrompt }];
     for (const msg of history) {
@@ -226,20 +262,24 @@ async function processTelegramMessage(text, chatId, config) {
 
     await addTelegramHistory(text, mainReply);
 
-    const url = `https://api.telegram.org/bot${config.telegramToken}/sendMessage`;
-    const cId = isNaN(chatId) ? chatId : Number(chatId);
-    await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: cId,
-        text: mainReply.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'),
-        parse_mode: 'HTML'
-      })
-    });
+    await sendTelegramMessage(chatId, config, mainReply);
   } catch (e) {
     console.error('processTelegramMessage error:', e);
   }
+}
+
+async function sendTelegramMessage(chatId, config, text) {
+  const url = `https://api.telegram.org/bot${config.telegramToken}/sendMessage`;
+  const cId = isNaN(chatId) ? chatId : Number(chatId);
+  await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: cId,
+      text: text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'),
+      parse_mode: 'HTML'
+    })
+  });
 }
 
 async function pollTelegram() {
