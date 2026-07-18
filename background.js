@@ -6,6 +6,9 @@ const DEFAULT_CONFIG = {
   model: 'deepseek-chat',
   language: 'es',
   autoAnalyze: true,
+  telegramEnabled: false,
+  telegramToken: '',
+  telegramChatId: '',
   systemPrompt: `Eres un asistente de IA proactivo y conversacional integrado en el navegador del usuario. Tienes visión artificial y ves la pantalla del usuario en cada mensaje.
 
 Personalidad: directo, útil, práctico. Sin rodeos.
@@ -174,6 +177,24 @@ async function callGemini(imageDataUrl, userMessage, history, config, vision, is
   return data.candidates[0].content.parts[0].text.trim();
 }
 
+async function sendToTelegram(text, config) {
+  if (!config.telegramEnabled || !config.telegramToken || !config.telegramChatId) return;
+  try {
+    const url = `https://api.telegram.org/bot${config.telegramToken}/sendMessage`;
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: config.telegramChatId,
+        text: text.substring(0, 4000),
+        parse_mode: 'Markdown'
+      })
+    });
+  } catch (e) {
+    console.error('Telegram error:', e);
+  }
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'ANALYZE_SCREENSHOT') {
     getConfig().then(async (config) => {
@@ -204,6 +225,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         const result = await callAI(imageDataUrl, message.query || '', message.history || '', config);
         sendResponse(result);
+        if (result.response) {
+          sendToTelegram(`🤖 *Respuesta de la IA:*\n${result.response}`, config);
+        }
       } catch (err) {
         sendResponse({ error: err.message });
       }

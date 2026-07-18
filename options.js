@@ -4,6 +4,9 @@ const DEFAULT_CONFIG = {
   model: 'gemini-2.0-flash',
   language: 'es',
   autoAnalyze: true,
+  telegramEnabled: false,
+  telegramToken: '',
+  telegramChatId: '',
   systemPrompt: `Eres un asistente de IA proactivo y conversacional integrado en el navegador del usuario. Tienes visión artificial y ves la pantalla del usuario en cada mensaje.
 
 Personalidad: directo, útil, práctico. Sin rodeos.
@@ -32,6 +35,9 @@ async function loadConfig() {
   document.getElementById('model').value = config.model;
   document.getElementById('language').value = config.language;
   document.getElementById('autoAnalyze').checked = config.autoAnalyze;
+  document.getElementById('telegramEnabled').checked = config.telegramEnabled;
+  document.getElementById('telegramToken').value = config.telegramToken;
+  document.getElementById('telegramChatId').value = config.telegramChatId;
   document.getElementById('systemPrompt').value = config.systemPrompt;
 }
 
@@ -42,6 +48,9 @@ function saveConfig() {
     model: document.getElementById('model').value.trim(),
     language: document.getElementById('language').value,
     autoAnalyze: document.getElementById('autoAnalyze').checked,
+    telegramEnabled: document.getElementById('telegramEnabled').checked,
+    telegramToken: document.getElementById('telegramToken').value.trim(),
+    telegramChatId: document.getElementById('telegramChatId').value.trim(),
     systemPrompt: document.getElementById('systemPrompt').value.trim()
   };
 

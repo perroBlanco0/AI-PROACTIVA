@@ -133,6 +133,24 @@
   </div>
 
   <div class="card">
+    <h2>📨 Telegram</h2>
+    <div class="checkbox-field">
+      <input type="checkbox" id="telegramEnabled">
+      <label for="telegramEnabled">Enviar respuestas de la IA a Telegram</label>
+    </div>
+    <div class="field">
+      <label for="telegramToken">Bot Token</label>
+      <input type="password" id="telegramToken" placeholder="123456:ABC-defghi...">
+      <div class="hint">Crea un bot con <a href="https://t.me/BotFather" target="_blank">@BotFather</a> y copia el token</div>
+    </div>
+    <div class="field">
+      <label for="telegramChatId">Chat ID</label>
+      <input type="text" id="telegramChatId" placeholder="123456789">
+      <div class="hint">Tu ID de usuario o grupo. Usa <a href="https://t.me/userinfobot" target="_blank">@userinfobot</a> para obtenerlo</div>
+    </div>
+  </div>
+
+  <div class="card">
     <details>
       <summary>🧠 Prompt del sistema (avanzado)</summary>
       <div class="field">

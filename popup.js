@@ -14,6 +14,10 @@ async function updateStatus() {
     const config = await chrome.runtime.sendMessage({ type: 'GET_CONFIG' });
     statusEl.textContent = `✅ ${config.model}`;
     statusEl.className = 'status ok';
+    const telEl = document.getElementById('telegramStatus');
+    if (config.telegramEnabled && config.telegramToken && config.telegramChatId) {
+      telEl.className = 'on';
+    }
   } catch (err) {
     statusEl.textContent = `⚠️ ${err.message}`;
     statusEl.className = 'status error';
