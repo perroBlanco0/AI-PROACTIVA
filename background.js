@@ -9,23 +9,20 @@ const DEFAULT_CONFIG = {
   telegramEnabled: false,
   telegramToken: '',
   telegramChatId: '',
-  systemPrompt: `Eres un asistente de IA proactivo y conversacional integrado en el navegador del usuario. Tienes visión artificial y ves la pantalla del usuario en cada mensaje.
+  systemPrompt: `Eres un asistente de IA integrado en el navegador del usuario. Tienes visión artificial.
 
-Personalidad: directo, útil, práctico. Sin rodeos.
+Personalidad: directo, útil, sin rodeos. Sin saludos ni presentaciones.
 
 Reglas:
-1. Responde SIEMPRE con una conclusión breve y clara (máximo 3-4 líneas).
-2. Al final, sugiere el siguiente paso lógico en forma de pregunta.
-3. Tus respuestas deben sonar a "resumen ejecutivo" + "¿qué sigue?".
-4. Mantén contexto de toda la conversación.
+1. Responde con 2-3 líneas máximas. Breve y al grano.
+2. Considera el sitio web actual del usuario como contexto.
+3. Sugiere 3 preguntas específicas al final, separadas por "||".
+4. No saludes ni te presentes. Ve directo al punto.
 
-Siempre respondes en el mismo idioma que el usuario.
-Al final de tu respuesta, incluye 2-3 sugerencias de preguntas de seguimiento separadas por "||".
+Formato:
+[Respuesta breve]
 
-Formato de respuesta:
-[Conclusión breve]
-
-||¿Siguiente paso 1?||¿Siguiente paso 2?||¿Siguiente paso 3?`
+||Pregunta 1?||Pregunta 2?||Pregunta 3?`
 };
 
 function supportsVision(model) {
@@ -50,15 +47,15 @@ async function captureTab(tabId) {
   return dataUrl;
 }
 
-async function callAI(imageDataUrl, userMessage, history, config) {
+async function callAI(imageDataUrl, userMessage, history, config, pageUrl, pageTitle) {
   const vision = supportsVision(config.model) && imageDataUrl;
   const isInitial = !userMessage;
 
   let fullText;
   if (isGemini(config)) {
-    fullText = await callGemini(imageDataUrl, userMessage, history, config, vision, isInitial);
+    fullText = await callGemini(imageDataUrl, userMessage, history, config, vision, isInitial, pageUrl, pageTitle);
   } else {
-    fullText = await callOpenAI(imageDataUrl, userMessage, history, config, vision, isInitial);
+    fullText = await callOpenAI(imageDataUrl, userMessage, history, config, vision, isInitial, pageUrl, pageTitle);
   }
 
   const parts = fullText.split('||');
@@ -68,8 +65,9 @@ async function callAI(imageDataUrl, userMessage, history, config) {
   return { response: mainResponse, suggestions };
 }
 
-async function callOpenAI(imageDataUrl, userMessage, history, config, vision, isInitial) {
-  const messages = [{ role: 'system', content: config.systemPrompt }];
+async function callOpenAI(imageDataUrl, userMessage, history, config, vision, isInitial, pageUrl, pageTitle) {
+  const siteContext = pageUrl ? `\n\nContexto: el usuario está en ${pageTitle || 'una página'} (${pageUrl})` : '';
+  const messages = [{ role: 'system', content: config.systemPrompt + siteContext }];
 
   if (history) {
     messages.push({
@@ -80,8 +78,8 @@ async function callOpenAI(imageDataUrl, userMessage, history, config, vision, is
 
   if (isInitial) {
     const prompt = config.language === 'es'
-      ? 'Acabo de llegar a esta página. Observa la captura de pantalla y preséntate. Luego sugiere 2-3 preguntas relevantes sobre lo que ves. Responde en español.'
-      : 'I just arrived at this page. Look at the screenshot and introduce yourself. Then suggest 2-3 relevant questions.';
+      ? 'Analiza la captura de pantalla. Responde breve y directamente sobre lo que ves. Sugiere 3 preguntas específicas.'
+      : 'Look at the screenshot. Respond briefly. Suggest 3 specific questions.';
 
     if (vision) {
       messages.push({
@@ -131,7 +129,7 @@ async function callOpenAI(imageDataUrl, userMessage, history, config, vision, is
   return data.choices[0].message.content.trim();
 }
 
-async function callGemini(imageDataUrl, userMessage, history, config, vision, isInitial) {
+async function callGemini(imageDataUrl, userMessage, history, config, vision, isInitial, pageUrl, pageTitle) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`;
 
   let promptText;
@@ -158,7 +156,7 @@ async function callGemini(imageDataUrl, userMessage, history, config, vision, is
 
   const body = {
     contents: [{ role: 'user', parts: userParts }],
-    systemInstruction: { parts: [{ text: config.systemPrompt }] },
+    systemInstruction: { parts: [{ text: config.systemPrompt + (pageUrl ? `\n\nContexto: el usuario está en ${pageTitle || 'una página'} (${pageUrl})` : '') }] },
     generationConfig: { temperature: 0.7, maxOutputTokens: 800 }
   };
 
@@ -321,7 +319,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           return;
         }
 
-        const result = await callAI(imageDataUrl, message.query || '', message.history || '', config);
+        const result = await callAI(imageDataUrl, message.query || '', message.history || '', config, message.url, message.title);
         sendResponse(result);
         if (result.response) {
           sendToTelegram(`🤖 <b>Respuesta de la IA:</b>\n${result.response}`, config);

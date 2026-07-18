@@ -162,7 +162,9 @@ async function sendUserMessage() {
     const response = await chrome.runtime.sendMessage({
       type: 'ANALYZE_SCREENSHOT',
       query: text,
-      history: formatHistory()
+      history: formatHistory(),
+      url: location.href,
+      title: document.title
     });
 
     removeTyping();
@@ -195,7 +197,11 @@ async function triggerInitialAnalysis() {
   addTyping();
 
   try {
-    const response = await chrome.runtime.sendMessage({ type: 'ANALYZE_SCREENSHOT' });
+    const response = await chrome.runtime.sendMessage({
+      type: 'ANALYZE_SCREENSHOT',
+      url: location.href,
+      title: document.title
+    });
 
     removeTyping();
 
