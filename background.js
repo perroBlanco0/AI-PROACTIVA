@@ -450,6 +450,10 @@ async function sendToTelegram(text, config) {
   }
 }
 
+chrome.tabs?.onActivated.addListener(() => pollTelegram());
+chrome.tabs?.onUpdated.addListener((tabId, changeInfo) => { if (changeInfo.status === 'complete') pollTelegram(); });
+chrome.runtime?.onStartup.addListener(() => setupTelegramPoll());
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'ANALYZE_SCREENSHOT') {
     getConfig().then(async (config) => {
