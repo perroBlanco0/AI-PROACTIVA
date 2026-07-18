@@ -379,11 +379,12 @@ async function pollTelegram() {
     console.error('pollTelegram error:', e);
   }
   telegramPolling = false;
-  setTimeout(pollTelegram, 15000);
+  chrome.alarms?.clear('telegram-poll-next');
+  chrome.alarms?.create('telegram-poll-next', { delayInMinutes: 0.3 });
 }
 
 chrome.alarms?.onAlarm.addListener((alarm) => {
-  if (alarm.name === 'telegram-poll') {
+  if (alarm.name === 'telegram-poll' || alarm.name === 'telegram-poll-next') {
     pollTelegram();
   }
 });
@@ -391,10 +392,14 @@ chrome.alarms?.onAlarm.addListener((alarm) => {
 async function setupTelegramPoll() {
   const config = await getConfig();
   if (config.telegramEnabled && config.telegramToken && config.telegramChatId && config.apiKey) {
+    chrome.alarms?.clear('telegram-poll');
+    chrome.alarms?.clear('telegram-poll-next');
     chrome.alarms?.create('telegram-poll', { periodInMinutes: 2 });
+    chrome.alarms?.create('telegram-poll-next', { delayInMinutes: 0.3 });
     pollTelegram();
   } else {
     chrome.alarms?.clear('telegram-poll');
+    chrome.alarms?.clear('telegram-poll-next');
   }
 }
 
