@@ -218,6 +218,8 @@ async function fetchUrlContent(url) {
 
 async function processTelegramMessage(text, chatId, config) {
   try {
+    sendTelegramTyping(chatId, config);
+
     const wantsRead = /lee|read/i.test(text);
     const wantsScreenshot = /captura|pantalla|screenshot|screen|mira|ve esto|lee|ve|que hay|que ves|analiza/i.test(text);
 
@@ -232,22 +234,20 @@ async function processTelegramMessage(text, chatId, config) {
       }
       if (url) {
         await sendTelegramMessage(chatId, config, `🌐 Leyendo ${url}...`);
+        sendTelegramTyping(chatId, config);
         const content = await fetchUrlContent(url);
         if (content) {
           const msgs = [{ role: 'system', content: config.systemPrompt }];
           msgs.push({ role: 'user', content: `He visitado ${url} y este es su contenido:\n\n${content}\n\n${text}` });
-          const resp = await fetch(config.apiEndpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.apiKey}` },
-            body: JSON.stringify({ model: config.model, messages: msgs, temperature: 0.7, max_tokens: 800 })
-          });
-          if (resp.ok) {
-            const data = await resp.json();
-            const reply = data.choices[0].message.content.trim();
+          try {
+            const reply = await callAIWithHistory(msgs, config);
             const parts = reply.split('||');
             const mainReply = parts[0].trim();
             await addTelegramHistory(text, mainReply);
             await sendTelegramMessage(chatId, config, mainReply);
+            return;
+          } catch (e) {
+            await sendTelegramMessage(chatId, config, `⚠️ Error al analizar: ${e.message}`);
             return;
           }
         } else {
@@ -262,6 +262,7 @@ async function processTelegramMessage(text, chatId, config) {
       try {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (!tab) throw new Error('No hay pestaña activa');
+        try { await chrome.windows.update(tab.windowId, { focused: true }); } catch (e) {}
         const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'jpeg', quality: 70 });
         const visionMessages = [{ role: 'system', content: config.systemPrompt }];
         visionMessages.push({
@@ -271,20 +272,13 @@ async function processTelegramMessage(text, chatId, config) {
             { type: 'image_url', image_url: { url: dataUrl, detail: 'high' } }
           ]
         });
-        const resp = await fetch(config.apiEndpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.apiKey}` },
-          body: JSON.stringify({ model: config.model, messages: visionMessages, temperature: 0.7, max_tokens: 800 })
-        });
-        if (resp.ok) {
-          const data = await resp.json();
-          const reply = data.choices[0].message.content.trim();
-          const parts = reply.split('||');
-          const mainReply = parts[0].trim();
-          await addTelegramHistory(text, mainReply);
-          await sendTelegramMessage(chatId, config, mainReply);
-          return;
-        }
+        sendTelegramTyping(chatId, config);
+        const reply = await callAIWithHistory(visionMessages, config);
+        const parts = reply.split('||');
+        const mainReply = parts[0].trim();
+        await addTelegramHistory(text, mainReply);
+        await sendTelegramMessage(chatId, config, mainReply);
+        return;
       } catch (e) {
         await sendTelegramMessage(chatId, config, `⚠️ No pude capturar la pantalla: ${e.message}`);
         return;
@@ -298,34 +292,16 @@ async function processTelegramMessage(text, chatId, config) {
     }
     messages.push({ role: 'user', content: text });
 
-    const response = await fetch(config.apiEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.apiKey}`
-      },
-      body: JSON.stringify({
-        model: config.model,
-        messages: messages,
-        temperature: 0.7,
-        max_tokens: 800
-      })
-    });
-
-    if (!response.ok) {
-      const err = await response.text();
-      console.error('AI error on Telegram message:', err);
-      return;
+    try {
+      sendTelegramTyping(chatId, config);
+      const reply = await callAIWithHistory(messages, config);
+      const parts = reply.split('||');
+      const mainReply = parts[0].trim();
+      await addTelegramHistory(text, mainReply);
+      await sendTelegramMessage(chatId, config, mainReply);
+    } catch (e) {
+      await sendTelegramMessage(chatId, config, `⚠️ Error: ${e.message}`);
     }
-
-    const data = await response.json();
-    const reply = data.choices[0].message.content.trim();
-    const parts = reply.split('||');
-    const mainReply = parts[0].trim();
-
-    await addTelegramHistory(text, mainReply);
-
-    await sendTelegramMessage(chatId, config, mainReply);
   } catch (e) {
     console.error('processTelegramMessage error:', e);
   }
@@ -343,6 +319,54 @@ async function sendTelegramMessage(chatId, config, text) {
       parse_mode: 'HTML'
     })
   });
+}
+
+async function sendTelegramTyping(chatId, config) {
+  const url = `https://api.telegram.org/bot${config.telegramToken}/sendChatAction`;
+  const cId = isNaN(chatId) ? chatId : Number(chatId);
+  await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: cId, action: 'typing' })
+  });
+}
+
+async function callAIWithHistory(messages, config) {
+  if (isGemini(config)) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`;
+    const systemMsg = messages.find(m => m.role === 'system')?.content || '';
+    const otherMsgs = messages.filter(m => m.role !== 'system');
+    const body = {
+      contents: otherMsgs.map(m => {
+        if (Array.isArray(m.content)) {
+          return { role: 'user', parts: m.content.map(c => {
+            if (c.type === 'image_url') return { inlineData: { mimeType: 'image/jpeg', data: c.image_url.url.split(',')[1] } };
+            return { text: c.text };
+          })};
+        }
+        return { role: 'user', parts: [{ text: m.content }] };
+      }),
+      systemInstruction: { parts: [{ text: systemMsg }] },
+      generationConfig: { temperature: 0.7, maxOutputTokens: 800 }
+    };
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!resp.ok) throw new Error(`Gemini error ${resp.status}: ${(await resp.text()).substring(0, 200)}`);
+    const data = await resp.json();
+    return data.candidates[0].content.parts[0].text.trim();
+  } else {
+    const resp = await fetch(config.apiEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.apiKey}` },
+      body: JSON.stringify({ model: config.model, messages, temperature: 0.7, max_tokens: 800 })
+    });
+    if (!resp.ok) throw new Error(`API error ${resp.status}: ${(await resp.text()).substring(0, 200)}`);
+    const data = await resp.json();
+    return data.choices[0].message.content.trim();
+  }
 }
 
 let telegramPolling = false;
