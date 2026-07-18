@@ -77,4 +77,20 @@ document.getElementById('captureBtn').addEventListener('click', async () => {
   btn.disabled = false;
 });
 
+document.getElementById('testTelegramBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('testTelegramBtn');
+  btn.textContent = 'Enviando...';
+  btn.disabled = true;
+  const result = await chrome.runtime.sendMessage({ type: 'TEST_TELEGRAM' });
+  if (result && result.ok) {
+    btn.textContent = '✅ Enviado';
+  } else {
+    btn.textContent = `❌ ${result?.error || 'Error'}`;
+  }
+  setTimeout(() => {
+    btn.textContent = '📨 Probar Telegram';
+    btn.disabled = false;
+  }, 3000);
+});
+
 updateStatus();

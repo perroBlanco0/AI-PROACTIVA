@@ -251,4 +251,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     chrome.storage.sync.set(message.config, () => sendResponse({ ok: true }));
     return true;
   }
+
+  if (message.type === 'TEST_TELEGRAM') {
+    getConfig().then(async (config) => {
+      if (!config.telegramToken || !config.telegramChatId) {
+        sendResponse({ ok: false, error: 'Token o Chat ID no configurados' });
+        return;
+      }
+      try {
+        const url = `https://api.telegram.org/bot${config.telegramToken}/sendMessage`;
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: config.telegramChatId,
+            text: '🔔 <b>Prueba desde AI Proactive Agent</b>\nLa conexión con Telegram funciona correctamente.',
+            parse_mode: 'HTML'
+          })
+        });
+        if (resp.ok) {
+          sendResponse({ ok: true });
+        } else {
+          const err = await resp.text();
+          sendResponse({ ok: false, error: `HTTP ${resp.status}: ${err.substring(0, 200)}` });
+        }
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message });
+      }
+    });
+    return true;
+  }
 });
