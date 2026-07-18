@@ -322,7 +322,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const result = await callAI(imageDataUrl, message.query || '', message.history || '', config, message.url, message.title);
         sendResponse(result);
         if (result.response) {
-          sendToTelegram(`🤖 <b>Respuesta de la IA:</b>\n${result.response}`, config);
+          const urlLine = message.url ? `\n📍 <a href="${message.url.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}">${message.title || message.url}</a>` : '';
+          sendToTelegram(`🤖 <b>Respuesta de la IA:</b>\n${result.response}${urlLine}`, config);
         }
       } catch (err) {
         sendResponse({ error: err.message });
