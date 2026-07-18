@@ -181,11 +181,12 @@ async function sendToTelegram(text, config) {
   if (!config.telegramEnabled || !config.telegramToken || !config.telegramChatId) return;
   try {
     const url = `https://api.telegram.org/bot${config.telegramToken}/sendMessage`;
+    const chatId = isNaN(config.telegramChatId) ? config.telegramChatId : Number(config.telegramChatId);
     const resp = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        chat_id: config.telegramChatId,
+        chat_id: chatId,
         text: text.substring(0, 4000).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'),
         parse_mode: 'HTML'
       })
@@ -260,11 +261,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       try {
         const url = `https://api.telegram.org/bot${config.telegramToken}/sendMessage`;
+        const chatId = isNaN(config.telegramChatId) ? config.telegramChatId : Number(config.telegramChatId);
         const resp = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            chat_id: config.telegramChatId,
+            chat_id: chatId,
             text: '🔔 <b>Prueba desde AI Proactive Agent</b>\nLa conexión con Telegram funciona correctamente.',
             parse_mode: 'HTML'
           })
