@@ -152,7 +152,7 @@ async function sendUserMessage() {
   input.value = '';
   isProcessing = true;
   setSuggestions([]);
-  chatWidget.classList.remove('aipa-minimized');
+  if (chatWidget) chatWidget.classList.remove('aipa-minimized');
 
   addMessage(text, 'user');
   addTyping();
@@ -215,7 +215,7 @@ async function triggerInitialAnalysis() {
   }
 
   isProcessing = false;
-  setTimeout(() => chatWidget.classList.add('aipa-minimized'), 8000);
+  setTimeout(() => { if (chatWidget) chatWidget.classList.add('aipa-minimized'); }, 8000);
 }
 
 function debouncedAnalyze() {
