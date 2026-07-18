@@ -190,9 +190,72 @@ async function addTelegramHistory(userMsg, aiReply) {
   await chrome.storage.local.set({ [TELEGRAM_HISTORY_KEY]: history });
 }
 
+function extractUrl(text) {
+  const match = text.match(/https?:\/\/[^\s]+/);
+  return match ? match[0] : null;
+}
+
+async function fetchUrlContent(url) {
+  try {
+    const rawUrl = url.includes('github.com') && !url.includes('raw.')
+      ? url.replace('github.com', 'raw.githubusercontent.com').replace(/\/blob\//, '/') + '/main/README.md'
+      : url;
+    const resp = await fetch(rawUrl, { signal: AbortSignal.timeout(10000) });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const text = await resp.text();
+    return text.substring(0, 8000);
+  } catch (e) {
+    try {
+      const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      const html = await resp.text();
+      const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      return text.substring(0, 8000);
+    } catch (e2) {
+      return null;
+    }
+  }
+}
+
 async function processTelegramMessage(text, chatId, config) {
   try {
+    const wantsRead = /lee|read/i.test(text);
     const wantsScreenshot = /captura|pantalla|screenshot|screen|mira|ve esto|lee|ve|que hay|que ves|analiza/i.test(text);
+
+    if (wantsRead) {
+      let url = extractUrl(text);
+      if (!url) {
+        const history = await getTelegramHistory();
+        for (let i = history.length - 1; i >= 0; i--) {
+          const found = extractUrl(history[i].content);
+          if (found) { url = found; break; }
+        }
+      }
+      if (url) {
+        await sendTelegramMessage(chatId, config, `🌐 Leyendo ${url}...`);
+        const content = await fetchUrlContent(url);
+        if (content) {
+          const msgs = [{ role: 'system', content: config.systemPrompt }];
+          msgs.push({ role: 'user', content: `He visitado ${url} y este es su contenido:\n\n${content}\n\n${text}` });
+          const resp = await fetch(config.apiEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.apiKey}` },
+            body: JSON.stringify({ model: config.model, messages: msgs, temperature: 0.7, max_tokens: 800 })
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            const reply = data.choices[0].message.content.trim();
+            const parts = reply.split('||');
+            const mainReply = parts[0].trim();
+            await addTelegramHistory(text, mainReply);
+            await sendTelegramMessage(chatId, config, mainReply);
+            return;
+          }
+        } else {
+          await sendTelegramMessage(chatId, config, '⚠️ No pude leer el contenido de esa URL.');
+          return;
+        }
+      }
+    }
 
     if (wantsScreenshot && supportsVision(config.model)) {
       await sendTelegramMessage(chatId, config, '📸 Capturando pantalla...');
