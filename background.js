@@ -192,7 +192,7 @@ async function addTelegramHistory(userMsg, aiReply) {
 
 async function processTelegramMessage(text, chatId, config) {
   try {
-    const wantsScreenshot = /captura|pantalla|screenshot|screen|mira|ve esto/i.test(text);
+    const wantsScreenshot = /captura|pantalla|screenshot|screen|mira|ve esto|lee|ve|que hay|que ves|analiza/i.test(text);
 
     if (wantsScreenshot && supportsVision(config.model)) {
       await sendTelegramMessage(chatId, config, '📸 Capturando pantalla...');
