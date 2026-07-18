@@ -177,6 +177,99 @@ async function callGemini(imageDataUrl, userMessage, history, config, vision, is
   return data.candidates[0].content.parts[0].text.trim();
 }
 
+async function processTelegramMessage(text, chatId, config) {
+  try {
+    const messages = [{ role: 'system', content: config.systemPrompt }];
+    messages.push({ role: 'user', content: text });
+
+    const response = await fetch(config.apiEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.apiKey}`
+      },
+      body: JSON.stringify({
+        model: config.model,
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 800
+      })
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      console.error('AI error on Telegram message:', err);
+      return;
+    }
+
+    const data = await response.json();
+    const reply = data.choices[0].message.content.trim();
+    const parts = reply.split('||');
+    const mainReply = parts[0].trim();
+
+    const url = `https://api.telegram.org/bot${config.telegramToken}/sendMessage`;
+    const cId = isNaN(chatId) ? chatId : Number(chatId);
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: cId,
+        text: mainReply.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'),
+        parse_mode: 'HTML'
+      })
+    });
+  } catch (e) {
+    console.error('processTelegramMessage error:', e);
+  }
+}
+
+async function pollTelegram() {
+  try {
+    const config = await getConfig();
+    if (!config.telegramEnabled || !config.telegramToken || !config.telegramChatId || !config.apiKey) return;
+
+    const { telegramPollOffset = 0 } = await chrome.storage.local.get('telegramPollOffset');
+    const chatId = isNaN(config.telegramChatId) ? config.telegramChatId : Number(config.telegramChatId);
+
+    const url = `https://api.telegram.org/bot${config.telegramToken}/getUpdates?offset=${telegramPollOffset}&timeout=30`;
+    const resp = await fetch(url);
+    if (!resp.ok) return;
+
+    const data = await resp.json();
+    if (!data.result || data.result.length === 0) return;
+
+    let maxUpdateId = telegramPollOffset;
+    for (const update of data.result) {
+      const msg = update.message;
+      if (!msg || !msg.text) continue;
+      if (msg.chat.id !== chatId) continue;
+
+      maxUpdateId = Math.max(maxUpdateId, update.update_id);
+      await processTelegramMessage(msg.text, chatId, config);
+    }
+
+    await chrome.storage.local.set({ telegramPollOffset: maxUpdateId + 1 });
+  } catch (e) {
+    console.error('pollTelegram error:', e);
+  }
+}
+
+chrome.alarms?.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'telegram-poll') {
+    pollTelegram();
+  }
+});
+
+async function setupTelegramPoll() {
+  const config = await getConfig();
+  if (config.telegramEnabled && config.telegramToken && config.telegramChatId && config.apiKey) {
+    chrome.alarms?.create('telegram-poll', { periodInMinutes: 1 });
+    pollTelegram();
+  } else {
+    chrome.alarms?.clear('telegram-poll');
+  }
+}
+
 async function sendToTelegram(text, config) {
   if (!config.telegramEnabled || !config.telegramToken || !config.telegramChatId) return;
   try {
@@ -249,7 +342,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'SAVE_CONFIG') {
-    chrome.storage.sync.set(message.config, () => sendResponse({ ok: true }));
+    chrome.storage.sync.set(message.config, () => {
+      sendResponse({ ok: true });
+      setupTelegramPoll();
+    });
     return true;
   }
 
@@ -284,3 +380,5 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 });
+
+setupTelegramPoll();
