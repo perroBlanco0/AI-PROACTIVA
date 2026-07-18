@@ -181,17 +181,21 @@ async function sendToTelegram(text, config) {
   if (!config.telegramEnabled || !config.telegramToken || !config.telegramChatId) return;
   try {
     const url = `https://api.telegram.org/bot${config.telegramToken}/sendMessage`;
-    await fetch(url, {
+    const resp = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: config.telegramChatId,
-        text: text.substring(0, 4000),
-        parse_mode: 'Markdown'
+        text: text.substring(0, 4000).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'),
+        parse_mode: 'HTML'
       })
     });
+    if (!resp.ok) {
+      const err = await resp.text();
+      console.error('Telegram API error:', resp.status, err);
+    }
   } catch (e) {
-    console.error('Telegram error:', e);
+    console.error('Telegram fetch error:', e);
   }
 }
 
@@ -226,7 +230,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const result = await callAI(imageDataUrl, message.query || '', message.history || '', config);
         sendResponse(result);
         if (result.response) {
-          sendToTelegram(`🤖 *Respuesta de la IA:*\n${result.response}`, config);
+          sendToTelegram(`🤖 <b>Respuesta de la IA:</b>\n${result.response}`, config);
         }
       } catch (err) {
         sendResponse({ error: err.message });
