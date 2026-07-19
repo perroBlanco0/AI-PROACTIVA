@@ -221,8 +221,13 @@ async function replyWithAI(chatId, config, text, msgs) {
   const parts = reply.split('||');
   const mainReply = parts[0].trim();
   const suggestions = parts.slice(1).filter(s => s.trim().length > 0).map(s => s.trim());
+  let fullText = mainReply;
+  if (suggestions.length > 0) {
+    const list = suggestions.map((s, i) => `${i + 1}. ${s}`).join('\n');
+    fullText += `\n\n${list}`;
+  }
   await addTelegramHistory(text, mainReply);
-  await sendTelegramMessage(chatId, config, mainReply, suggestions);
+  await sendTelegramMessage(chatId, config, fullText, suggestions);
 }
 
 async function processTelegramMessage(text, chatId, config) {
