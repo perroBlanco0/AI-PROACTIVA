@@ -411,7 +411,7 @@ async function pollTelegram() {
   }
   telegramPolling = false;
   chrome.alarms?.clear('telegram-poll-next');
-  chrome.alarms?.create('telegram-poll-next', { delayInMinutes: 0.3 });
+  chrome.alarms?.create('telegram-poll-next', { delayInMinutes: 1 });
 }
 
 chrome.alarms?.onAlarm.addListener((alarm) => {
@@ -426,7 +426,7 @@ async function setupTelegramPoll() {
     chrome.alarms?.clear('telegram-poll');
     chrome.alarms?.clear('telegram-poll-next');
     chrome.alarms?.create('telegram-poll', { periodInMinutes: 2 });
-    chrome.alarms?.create('telegram-poll-next', { delayInMinutes: 0.3 });
+    chrome.alarms?.create('telegram-poll-next', { delayInMinutes: 1 });
     pollTelegram();
   } else {
     chrome.alarms?.clear('telegram-poll');
