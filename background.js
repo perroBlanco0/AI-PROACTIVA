@@ -216,6 +216,15 @@ async function fetchUrlContent(url) {
   }
 }
 
+async function replyWithAI(chatId, config, text, msgs) {
+  const reply = await callAIWithHistory(msgs, config);
+  const parts = reply.split('||');
+  const mainReply = parts[0].trim();
+  const suggestions = parts.slice(1).filter(s => s.trim().length > 0).map(s => s.trim());
+  await addTelegramHistory(text, mainReply);
+  await sendTelegramMessage(chatId, config, mainReply, suggestions);
+}
+
 async function processTelegramMessage(text, chatId, config) {
   try {
     sendTelegramTyping(chatId, config);
@@ -239,17 +248,8 @@ async function processTelegramMessage(text, chatId, config) {
         if (content) {
           const msgs = [{ role: 'system', content: config.systemPrompt }];
           msgs.push({ role: 'user', content: `He visitado ${url} y este es su contenido:\n\n${content}\n\n${text}` });
-          try {
-            const reply = await callAIWithHistory(msgs, config);
-            const parts = reply.split('||');
-            const mainReply = parts[0].trim();
-            await addTelegramHistory(text, mainReply);
-            await sendTelegramMessage(chatId, config, mainReply);
-            return;
-          } catch (e) {
-            await sendTelegramMessage(chatId, config, `⚠️ Error al analizar: ${e.message}`);
-            return;
-          }
+          try { await replyWithAI(chatId, config, text, msgs); return; }
+          catch (e) { await sendTelegramMessage(chatId, config, `⚠️ Error: ${e.message}`); return; }
         } else {
           await sendTelegramMessage(chatId, config, '⚠️ No pude leer el contenido de esa URL.');
           return;
@@ -264,8 +264,8 @@ async function processTelegramMessage(text, chatId, config) {
         if (!tab) throw new Error('No hay pestaña activa');
         try { await chrome.windows.update(tab.windowId, { focused: true }); } catch (e) {}
         const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'jpeg', quality: 70 });
-        const visionMessages = [{ role: 'system', content: config.systemPrompt }];
-        visionMessages.push({
+        const msgs = [{ role: 'system', content: config.systemPrompt }];
+        msgs.push({
           role: 'user',
           content: [
             { type: 'text', text: text },
@@ -273,12 +273,8 @@ async function processTelegramMessage(text, chatId, config) {
           ]
         });
         sendTelegramTyping(chatId, config);
-        const reply = await callAIWithHistory(visionMessages, config);
-        const parts = reply.split('||');
-        const mainReply = parts[0].trim();
-        await addTelegramHistory(text, mainReply);
-        await sendTelegramMessage(chatId, config, mainReply);
-        return;
+        try { await replyWithAI(chatId, config, text, msgs); return; }
+        catch (e) { await sendTelegramMessage(chatId, config, `⚠️ Error: ${e.message}`); return; }
       } catch (e) {
         await sendTelegramMessage(chatId, config, `⚠️ No pude capturar la pantalla: ${e.message}`);
         return;
@@ -294,11 +290,7 @@ async function processTelegramMessage(text, chatId, config) {
 
     try {
       sendTelegramTyping(chatId, config);
-      const reply = await callAIWithHistory(messages, config);
-      const parts = reply.split('||');
-      const mainReply = parts[0].trim();
-      await addTelegramHistory(text, mainReply);
-      await sendTelegramMessage(chatId, config, mainReply);
+      await replyWithAI(chatId, config, text, messages);
     } catch (e) {
       await sendTelegramMessage(chatId, config, `⚠️ Error: ${e.message}`);
     }
@@ -307,17 +299,23 @@ async function processTelegramMessage(text, chatId, config) {
   }
 }
 
-async function sendTelegramMessage(chatId, config, text) {
+async function sendTelegramMessage(chatId, config, text, suggestions) {
   const url = `https://api.telegram.org/bot${config.telegramToken}/sendMessage`;
   const cId = isNaN(chatId) ? chatId : Number(chatId);
+  const body = {
+    chat_id: cId,
+    text: text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'),
+    parse_mode: 'HTML'
+  };
+  if (suggestions && suggestions.length > 0) {
+    body.reply_markup = {
+      inline_keyboard: suggestions.filter(s => s).map(s => [{ text: s.substring(0, 50), callback_data: s.substring(0, 64) }])
+    };
+  }
   await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: cId,
-      text: text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'),
-      parse_mode: 'HTML'
-    })
+    body: JSON.stringify(body)
   });
 }
 
@@ -390,11 +388,20 @@ async function pollTelegram() {
 
     let maxUpdateId = telegramPollOffset;
     for (const update of data.result) {
+      maxUpdateId = Math.max(maxUpdateId, update.update_id);
+
+      if (update.callback_query) {
+        const cq = update.callback_query;
+        if (cq.message?.chat?.id !== chatId) continue;
+        await fetch(`https://api.telegram.org/bot${config.telegramToken}/answerCallbackQuery?callback_query_id=${cq.id}`);
+        await processTelegramMessage(cq.data, chatId, config);
+        continue;
+      }
+
       const msg = update.message;
       if (!msg || !msg.text) continue;
       if (msg.chat.id !== chatId) continue;
 
-      maxUpdateId = Math.max(maxUpdateId, update.update_id);
       await processTelegramMessage(msg.text, chatId, config);
     }
 
