@@ -42,6 +42,7 @@ function createChatWidget() {
     <div id="aipa-chat-suggestions"></div>
     <div id="aipa-chat-input-area">
       <input type="text" id="aipa-chat-input" placeholder="Escribe un mensaje..." autocomplete="off">
+      <button id="aipa-chat-capture" title="Capturar pantalla">📸</button>
       <button id="aipa-chat-send" title="Enviar">➤</button>
     </div>
   `;
@@ -69,6 +70,39 @@ function createChatWidget() {
   document.getElementById('aipa-chat-send').addEventListener('click', sendUserMessage);
   document.getElementById('aipa-chat-input').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') sendUserMessage();
+  });
+  document.getElementById('aipa-chat-capture').addEventListener('click', async () => {
+    if (isProcessing) return;
+    isProcessing = true;
+    const input = document.getElementById('aipa-chat-input');
+    input.value = '';
+    setSuggestions([]);
+    chatWidget.classList.remove('aipa-minimized');
+    addTyping();
+    setStatus('Capturando...');
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'ANALYZE_SCREENSHOT',
+        url: location.href,
+        title: document.title
+      });
+      removeTyping();
+      if (response && response.response) {
+        addMessage(response.response, 'agent');
+        setSuggestions(response.suggestions);
+        setStatus('Listo');
+        conversationHistory.push({ role: 'assistant', content: response.response });
+      } else if (response && response.error) {
+        addMessage(response.error, 'agent');
+        setStatus('Error', true);
+      }
+    } catch (err) {
+      removeTyping();
+      addMessage(`Error: ${err.message}`, 'agent');
+      setStatus('Error', true);
+    }
+    isProcessing = false;
+    setTimeout(() => { if (chatWidget) chatWidget.classList.add('aipa-minimized'); }, 8000);
   });
 
   let autoMinimizeTimer = null;
