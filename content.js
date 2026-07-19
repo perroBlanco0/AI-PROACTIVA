@@ -168,6 +168,21 @@ function setSuggestions(suggestions) {
     });
     container.appendChild(chip);
   });
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'aipa-chip';
+  saveBtn.style.background = '#fef3c7';
+  saveBtn.style.borderColor = '#fde68a';
+  saveBtn.style.color = '#92400e';
+  saveBtn.textContent = '💾 Guardar respuesta';
+  saveBtn.addEventListener('click', async () => {
+    const last = conversationHistory.filter(m => m.role === 'assistant').pop();
+    if (last) {
+      await chrome.runtime.sendMessage({ type: 'SAVE_NOTE', title: document.title, content: last.content });
+      saveBtn.textContent = '✅ Guardado';
+      setTimeout(() => { saveBtn.textContent = '💾 Guardar respuesta'; }, 2000);
+    }
+  });
+  container.appendChild(saveBtn);
 }
 
 function setStatus(text, isError) {

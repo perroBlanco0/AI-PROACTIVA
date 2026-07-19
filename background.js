@@ -195,7 +195,57 @@ function extractUrl(text) {
   return match ? match[0] : null;
 }
 
+async function extractPdfText(url) {
+  const resp = await fetch(url, { signal: AbortSignal.timeout(30000) });
+  const buf = await resp.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let text = '';
+  let i = 0;
+  while (i < bytes.length) {
+    if (bytes[i] === 0x28) {
+      i++;
+      let chunk = '';
+      while (i < bytes.length && bytes[i] !== 0x29) {
+        if (bytes[i] === 0x5c && i + 1 < bytes.length) {
+          i++;
+          const next = bytes[i];
+          if (next === 0x6e) chunk += '\n';
+          else if (next === 0x72) chunk += '\r';
+          else if (next === 0x74) chunk += '\t';
+          else if (next === 0x28) chunk += '(';
+          else if (next === 0x29) chunk += ')';
+          else chunk += String.fromCharCode(next);
+        } else if (bytes[i] >= 0x20 && bytes[i] <= 0x7e) {
+          chunk += String.fromCharCode(bytes[i]);
+        } else if (bytes[i] > 0x7e && bytes[i] < 0xff) {
+          const c = String.fromCharCode(bytes[i], bytes[i + 1] || 0);
+          chunk += c;
+        }
+        i++;
+      }
+      if (chunk.trim().length > 2) text += chunk + ' ';
+    } else if (bytes[i] === 0x3c && bytes[i + 1] === 0x3c) {
+      i += 2;
+      let hex = '';
+      while (i < bytes.length && bytes[i] !== 0x3e) {
+        hex += String.fromCharCode(bytes[i]);
+        i++;
+      }
+      const code = parseInt(hex.trim(), 16);
+      if (!isNaN(code) && code >= 32 && code <= 126) text += String.fromCharCode(code);
+    }
+    i++;
+  }
+  return text.replace(/\s+/g, ' ').trim().substring(0, 15000) || null;
+}
+
 async function fetchUrlContent(url) {
+  if (/\.pdf($|\?)/i.test(url)) {
+    try {
+      const pdfText = await extractPdfText(url);
+      if (pdfText) return pdfText;
+    } catch (e) {}
+  }
   try {
     const rawUrl = url.includes('github.com') && !url.includes('raw.')
       ? url.replace('github.com', 'raw.githubusercontent.com').replace(/\/blob\//, '/') + '/main/README.md'
@@ -203,13 +253,13 @@ async function fetchUrlContent(url) {
     const resp = await fetch(rawUrl, { signal: AbortSignal.timeout(10000) });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const text = await resp.text();
-    return text.substring(0, 8000);
+    return text.substring(0, 12000);
   } catch (e) {
     try {
       const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
       const html = await resp.text();
       const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-      return text.substring(0, 8000);
+      return text.substring(0, 12000);
     } catch (e2) {
       return null;
     }
@@ -230,14 +280,75 @@ async function replyWithAI(chatId, config, text, msgs) {
   await sendTelegramMessage(chatId, config, fullText, suggestions);
 }
 
+const NOTES_KEY = 'savedNotes';
+let taskMode = false;
+
+async function getSavedNotes() {
+  const { [NOTES_KEY]: notes = [] } = await chrome.storage.local.get(NOTES_KEY);
+  return notes;
+}
+
+async function saveNote(title, content) {
+  const notes = await getSavedNotes();
+  notes.push({ title, content, date: new Date().toISOString() });
+  if (notes.length > 50) notes.splice(0, notes.length - 50);
+  await chrome.storage.local.set({ [NOTES_KEY]: notes });
+}
+
 async function processTelegramMessage(text, chatId, config) {
   try {
     sendTelegramTyping(chatId, config);
 
-    const wantsRead = /lee|read/i.test(text);
-    const wantsScreenshot = /captura|pantalla|screenshot|screen|mira|ve esto|lee|ve|que hay|que ves|analiza/i.test(text);
+    if (/^\/notas/i.test(text)) {
+      const notes = await getSavedNotes();
+      if (notes.length === 0) {
+        await sendTelegramMessage(chatId, config, '📝 No tienes notas guardadas todavía.');
+      } else {
+        const list = notes.slice(-10).reverse().map((n, i) => `${i + 1}. ${n.title}`).join('\n');
+        await sendTelegramMessage(chatId, config, `📝 *Últimas notas:*\n\n${list}\n\nUsá "nota 1", "nota 2"... para ver el detalle.`);
+      }
+      return;
+    }
 
-    if (wantsRead) {
+    if (/^nota \d+/i.test(text)) {
+      const idx = parseInt(text.match(/\d+/)[0], 10);
+      const notes = await getSavedNotes();
+      const note = notes[notes.length - idx];
+      if (note) {
+        const date = new Date(note.date).toLocaleString();
+        await sendTelegramMessage(chatId, config, `📌 <b>${note.title}</b> (${date})\n\n${note.content.substring(0, 2000)}`);
+      } else {
+        await sendTelegramMessage(chatId, config, '⚠️ Nota no encontrada.');
+      }
+      return;
+    }
+
+    if (/^(guarda|nota|report|guarda eso)/i.test(text)) {
+      const history = await getTelegramHistory();
+      const lastResponse = history.filter(m => m.role === 'assistant').pop();
+      if (lastResponse) {
+        const title = text.replace(/^(guarda|nota|report|guarda eso)\s*/i, '').substring(0, 80) || 'Nota sin título';
+        await saveNote(title, lastResponse.content);
+        await sendTelegramMessage(chatId, config, `✅ Nota guardada: "${title}"`);
+      } else {
+        await sendTelegramMessage(chatId, config, '⚠️ No hay respuesta anterior para guardar.');
+      }
+      return;
+    }
+
+    if (/^\/tarea/i.test(text)) {
+      taskMode = true;
+      await sendTelegramMessage(chatId, config, '📚 <b>Modo tarea activado</b>\nTe guiaré paso a paso sin darte la respuesta directa. Enviá /fin para salir.');
+      return;
+    }
+
+    if (/^\/fin/i.test(text)) {
+      taskMode = false;
+      await sendTelegramMessage(chatId, config, '✅ Modo tarea desactivado.');
+      return;
+    }
+
+    const wantsRead = /lee|read/i.test(text);
       let url = extractUrl(text);
       if (!url) {
         const history = await getTelegramHistory();
@@ -287,7 +398,10 @@ async function processTelegramMessage(text, chatId, config) {
     }
 
     const history = await getTelegramHistory();
-    const messages = [{ role: 'system', content: config.systemPrompt }];
+    const taskPrompt = taskMode
+      ? `\n\nModo TUTOR activo: Eres un tutor que guía al estudiante paso a paso. No des la respuesta directa. Haz preguntas que lo lleven a descubrir la solución por sí mismo. Sé paciente y educativo.`
+      : '';
+    const messages = [{ role: 'system', content: config.systemPrompt + taskPrompt }];
     for (const msg of history) {
       messages.push(msg);
     }
@@ -520,6 +634,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ ok: true });
       setupTelegramPoll();
     });
+    return true;
+  }
+
+  if (message.type === 'SAVE_NOTE') {
+    getConfig().then(async (config) => {
+      await saveNote(message.title || 'Nota', message.content);
+      sendResponse({ ok: true });
+    });
+    return true;
+  }
+
+  if (message.type === 'GET_NOTES') {
+    getSavedNotes().then(n => sendResponse(n));
     return true;
   }
 
