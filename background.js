@@ -349,6 +349,8 @@ async function processTelegramMessage(text, chatId, config) {
     }
 
     const wantsRead = /lee|read/i.test(text);
+
+    if (wantsRead) {
       let url = extractUrl(text);
       if (!url) {
         const history = await getTelegramHistory();
